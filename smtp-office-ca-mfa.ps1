@@ -1,39 +1,57 @@
 ###############################################################################
+# INSTALL MFA MODULE
+###############################################################################
+
+$MFAExchangeModule = ((Get-ChildItem -Path $( $env:LOCALAPPDATA + "\Apps\2.0\" ) -Filter CreateExoPSSession.ps1 -Recurse).FullName | Select-Object -Last 1)
+If ($MFAExchangeModule -eq $null)
+{
+    Write-Host  `nPlease install Exchange Online MFA Module.  -ForegroundColor yellow
+    Write-Host You can install module using below blog : `nLink `nOR you can install module directly by entering "Y"`n
+    $Confirm = Read-Host Are you sure you want to install module directly? [Y] Yes [N] No
+    if ($Confirm -match "[yY]")
+    {
+        Write-Host Yes
+        Start-Process "iexplore.exe" "https://cmdletpswmodule.blob.core.windows.net/exopsmodule/Microsoft.Online.CSE.PSModule.Client.application"
+    }
+    else
+    {
+        Start-Process 'https://o365reports.com/2019/04/17/connect-exchange-online-using-mfa/'
+        Exit
+    }
+    $Confirmation = Read-Host Have you installed Exchange Online MFA Module? [Y] Yes [N] No
+    if ($Confirmation -match "[yY]")
+    {
+        $MFAExchangeModule = ((Get-ChildItem -Path $( $env:LOCALAPPDATA + "\Apps\2.0\" ) -Filter CreateExoPSSession.ps1 -Recurse).FullName | Select-Object -Last 1)
+        If ($MFAExchangeModule -eq $null)
+        {
+            Write-Host Exchange Online MFA module is not available -ForegroundColor red
+            Exit
+        }
+    }
+    else
+    {
+        Write-Host Exchange Online PowerShell Module is required
+        Start-Process 'https://o365reports.com/2019/04/17/connect-exchange-online-using-mfa/'
+        Exit
+    }
+}
+
+# load module
+. "$MFAExchangeModule"
+
+
+###############################################################################
 # AUTHENTICATION
 ###############################################################################
 
-$credential = Get-Credential
 
-$Session = New-PSSession -ConfigurationName Microsoft.Exchange `
-                             -ConnectionUri "https://outlook.office365.com/powershell-liveid/" `
-                             -Credential $credential `
-                             -Authentication Basic `
-                             -AllowRedirection -ErrorVariable CmdError
+$Session = Connect-EXOPSSession -WarningAction SilentlyContinue  -ErrorVariable CmdError
+
+Write-Output ""
+
 if ($CmdError)
 {
-    throw [System.Exception]::new('CreateSessionError', $CmdError)
-}
-
-if ($Session)
-{
-
-    Import-PSSession -Name Get-AcceptedDomain, New-AcceptedDomain, Remove-TransportRule, Remove-OutboundConnector,    `
-                               Remove-InboundConnector, Get-InboundConnector, Get-OutboundConnector,       `
-                               Get-TransportRule, New-OutboundConnector, New-TransportRule, New-InboundConnector,       `
-                               Get-RemoteDomain, Set-RemoteDomain, Get-HostedConnectionFilterPolicy, Set-HostedConnectionFilterPolicy,       `
-                               Get-DistributionGroup, Set-DistributionGroup, Get-DynamicDistributionGroup, Get-Group, `
-                               Get-OrganizationConfig, Set-TransportRule, Set-InboundConnector, Set-OutboundConnector `
-                               $Session -ErrorVariable CmdError
-    Write-Output ""
-
-    if ($CmdError)
-    {
-        throw [System.Exception]::new('ImportSessionError', $CmdError)
-    }
-}
-else
-{
-    throw [System.Exception]::new('AuthenticationFailed', "Cannot create a session")
+    throw [System.Exception]::new('ConnectionFailed', $CmdError)
 }
 
 ###############################################################################
@@ -54,12 +72,9 @@ if ($dehydrated) {
 # GLOBAL VARIABLES
 ###############################################################################
 
-
-$lsiSMTP = "smtp-fr.letsignit.com"
-$ip1 = "40.66.63.89"
-$ip2 = "40.66.63.90"
-$ip3 = "40.66.63.91"
-
+$lsiSMTP = "smtp-ca.letsignit.com"
+$ip1 = "40.80.240.101"
+$ip2 = "52.155.24.145"
 
 ###############################################################################
 # SET DOMAIN
@@ -110,14 +125,14 @@ Write-Output ""
 
 Write-Output "#### InboundConnector"
 
-$inbound = Get-InboundConnector | where { $ip1 -in $_.SenderIPAddresses  -and $ip2 -in $_.SenderIPAddresses -and $ip3  -in $_.SenderIPAddresses}
+$inbound = Get-InboundConnector | where { $ip1 -in $_.SenderIPAddresses  -and $ip2 -in $_.SenderIPAddresses }
 if ($inbound)
 {
     Set-InboundConnector -Identity $inbound.Id `
         -SenderDomains "*" `
         -ConnectorType OnPremises `
         -RequireTls $true `
-        -SenderIPAddresses $ip1, $ip2, $ip3 `
+        -SenderIPAddresses $ip1, $ip2 `
         -CloudServicesMailEnabled $true `
         -ErrorVariable CmdError
 
@@ -132,11 +147,11 @@ if ($inbound)
 else
 {
     New-InboundConnector `
-        -Name "LSI to o365" `
+        -Name "LSI_USE to o365" `
         -SenderDomains "*" `
         -ConnectorType OnPremises `
         -RequireTls $true `
-        -SenderIPAddresses $ip1, $ip2, $ip3 `
+        -SenderIPAddresses $ip1, $ip2 `
         -CloudServicesMailEnabled $true `
         -ErrorVariable CmdError
 
@@ -155,7 +170,7 @@ else
 
 Write-Output "#### OutboundConnector"
 
-$outbound = Get-OutboundConnector |  Where-Object {$_.SmartHosts -match $lsiSMTP -or $_.SmartHosts -match "lsicloud-smtp.letsignit.com"}
+$outbound = Get-OutboundConnector |  Where-Object SmartHosts -match $lsiSMTP
 if ($outbound)
 {
     Set-OutboundConnector -Identity $outbound.Id `
@@ -173,14 +188,14 @@ if ($outbound)
         throw [System.Exception]::new('UpdateOutboundConnector', $CmdError)
     }
 
-    Write-Output "Outbound connector found: updated"
+    Write-Output "Outbound connector found: do nothing"
     $outbound | ft Identity
 }
 else
 {
 
     New-OutboundConnector `
-        -Name "o365 to LSI" `
+        -Name "o365 to LSI_USE" `
         -ConnectorType OnPremises `
         -IsTransportRuleScoped $true `
         -UseMxRecord $false `
@@ -271,7 +286,7 @@ if ($rule)
 else
 {
     New-TransportRule `
-        -Name "Route email to LSI $domain" `
+        -Name "Route email to LSI_USE $domain" `
         -Priority 1 `
         -FromScope InOrganization `
         -SenderAddressLocation Envelope `
@@ -292,9 +307,7 @@ else
     }
 
     Write-Output "Outbound transport rules added"
-
 }
-
 
 ###############################################################################
 # ADD  HOSTED CONNECTION FILTER POLICY
@@ -302,11 +315,11 @@ else
 
 Write-Output "#### HostedConnectionFilterPolicy"
 
-$connectionFilter = Get-HostedConnectionFilterPolicy | where { $_.IPAllowList -match $ip1 -and $_.IPAllowList -match $ip2 -and $_.IPAllowList -match $ip3 }
+$connectionFilter = Get-HostedConnectionFilterPolicy | where { $_.IPAllowList -match $ip1 -and $_.IPAllowList -match $ip2 }
 if ($connectionFilter)
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2, $ip3} `
+        -IPAllowList @{ Add = $ip1, $ip2 } `
         -ErrorVariable CmdError
 
     if ($CmdError)
@@ -320,7 +333,7 @@ if ($connectionFilter)
 else
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2, $ip3} `
+        -IPAllowList @{ Add = $ip1, $ip2 } `
         -ErrorVariable CmdError
 
     if ($CmdError)

@@ -1,39 +1,57 @@
 ###############################################################################
+# INSTALL MFA MODULE
+###############################################################################
+
+$MFAExchangeModule = ((Get-ChildItem -Path $( $env:LOCALAPPDATA + "\Apps\2.0\" ) -Filter CreateExoPSSession.ps1 -Recurse).FullName | Select-Object -Last 1)
+If ($MFAExchangeModule -eq $null)
+{
+    Write-Host  `nPlease install Exchange Online MFA Module.  -ForegroundColor yellow
+    Write-Host You can install module using below blog : `nLink `nOR you can install module directly by entering "Y"`n
+    $Confirm = Read-Host Are you sure you want to install module directly? [Y] Yes [N] No
+    if ($Confirm -match "[yY]")
+    {
+        Write-Host Yes
+        Start-Process "iexplore.exe" "https://cmdletpswmodule.blob.core.windows.net/exopsmodule/Microsoft.Online.CSE.PSModule.Client.application"
+    }
+    else
+    {
+        Start-Process 'https://o365reports.com/2019/04/17/connect-exchange-online-using-mfa/'
+        Exit
+    }
+    $Confirmation = Read-Host Have you installed Exchange Online MFA Module? [Y] Yes [N] No
+    if ($Confirmation -match "[yY]")
+    {
+        $MFAExchangeModule = ((Get-ChildItem -Path $( $env:LOCALAPPDATA + "\Apps\2.0\" ) -Filter CreateExoPSSession.ps1 -Recurse).FullName | Select-Object -Last 1)
+        If ($MFAExchangeModule -eq $null)
+        {
+            Write-Host Exchange Online MFA module is not available -ForegroundColor red
+            Exit
+        }
+    }
+    else
+    {
+        Write-Host Exchange Online PowerShell Module is required
+        Start-Process 'https://o365reports.com/2019/04/17/connect-exchange-online-using-mfa/'
+        Exit
+    }
+}
+
+# load module
+. "$MFAExchangeModule"
+
+
+###############################################################################
 # AUTHENTICATION
 ###############################################################################
 
-$credential = Get-Credential
 
-$Session = New-PSSession -ConfigurationName Microsoft.Exchange `
-                             -ConnectionUri "https://outlook.office365.com/powershell-liveid/" `
-                             -Credential $credential `
-                             -Authentication Basic `
-                             -AllowRedirection -ErrorVariable CmdError
+$Session = Connect-EXOPSSession -WarningAction SilentlyContinue  -ErrorVariable CmdError
+
+Write-Output ""
+
 if ($CmdError)
 {
-    throw [System.Exception]::new('CreateSessionError', $CmdError)
-}
-
-if ($Session)
-{
-
-    Import-PSSession -Name Get-AcceptedDomain, New-AcceptedDomain, Remove-TransportRule, Remove-OutboundConnector,    `
-                               Remove-InboundConnector, Get-InboundConnector, Get-OutboundConnector,       `
-                               Get-TransportRule, New-OutboundConnector, New-TransportRule, New-InboundConnector,       `
-                               Get-RemoteDomain, Set-RemoteDomain, Get-HostedConnectionFilterPolicy, Set-HostedConnectionFilterPolicy,       `
-                               Get-DistributionGroup, Set-DistributionGroup, Get-DynamicDistributionGroup, Get-Group, `
-                               Get-OrganizationConfig, Set-TransportRule, Set-InboundConnector, Set-OutboundConnector `
-                               $Session -ErrorVariable CmdError
-    Write-Output ""
-
-    if ($CmdError)
-    {
-        throw [System.Exception]::new('ImportSessionError', $CmdError)
-    }
-}
-else
-{
-    throw [System.Exception]::new('AuthenticationFailed', "Cannot create a session")
+    throw [System.Exception]::new('ConnectionFailed', $CmdError)
 }
 
 ###############################################################################
@@ -42,10 +60,13 @@ else
 
 $dehydrated = Get-OrganizationConfig  | Select -ExpandProperty IsDehydrated
 
-if ($dehydrated) {
+if ($dehydrated)
+{
     Enable-OrganizationCustomization
     Write-Output "Organization hydration done"
-} else {
+}
+else
+{
     Write-Output "Organization hydration not needed"
 }
 
@@ -110,7 +131,7 @@ Write-Output ""
 
 Write-Output "#### InboundConnector"
 
-$inbound = Get-InboundConnector | where { $ip1 -in $_.SenderIPAddresses  -and $ip2 -in $_.SenderIPAddresses -and $ip3  -in $_.SenderIPAddresses}
+$inbound = Get-InboundConnector | where { $ip1 -in $_.SenderIPAddresses -and $ip2 -in $_.SenderIPAddresses -and $ip3 -in $_.SenderIPAddresses }
 if ($inbound)
 {
     Set-InboundConnector -Identity $inbound.Id `
@@ -155,7 +176,7 @@ else
 
 Write-Output "#### OutboundConnector"
 
-$outbound = Get-OutboundConnector |  Where-Object {$_.SmartHosts -match $lsiSMTP -or $_.SmartHosts -match "lsicloud-smtp.letsignit.com"}
+$outbound = Get-OutboundConnector |  Where-Object { $_.SmartHosts -match $lsiSMTP -or $_.SmartHosts -match "lsicloud-smtp.letsignit.com" }
 if ($outbound)
 {
     Set-OutboundConnector -Identity $outbound.Id `
@@ -246,7 +267,7 @@ Write-Output "#### TransportRule"
 
 $outbound = Get-OutboundConnector |  Where-Object SmartHosts -match $lsiSMTP
 
-$rule = Get-TransportRule | where { $_.RouteMessageOutboundConnector -eq $outbound -and ($_.SenderDomainIs -eq $domain -or $_.FromAddressMatchesPatterns -eq "@$domain$")}
+$rule = Get-TransportRule | where { $_.RouteMessageOutboundConnector -eq $outbound -and ($_.SenderDomainIs -eq $domain -or $_.FromAddressMatchesPatterns -eq "@$domain$") }
 if ($rule)
 {
     Set-TransportRule -Identity $rule.Name `
@@ -306,7 +327,7 @@ $connectionFilter = Get-HostedConnectionFilterPolicy | where { $_.IPAllowList -m
 if ($connectionFilter)
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2, $ip3} `
+        -IPAllowList @{ Add = $ip1, $ip2, $ip3 } `
         -ErrorVariable CmdError
 
     if ($CmdError)
@@ -320,7 +341,7 @@ if ($connectionFilter)
 else
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2, $ip3} `
+        -IPAllowList @{ Add = $ip1, $ip2, $ip3 } `
         -ErrorVariable CmdError
 
     if ($CmdError)

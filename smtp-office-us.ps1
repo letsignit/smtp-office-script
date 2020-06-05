@@ -55,10 +55,13 @@ if ($dehydrated) {
 ###############################################################################
 
 
-$lsiSMTP = "smtp-fr.letsignit.com"
-$ip1 = "40.66.63.89"
-$ip2 = "40.66.63.90"
-$ip3 = "40.66.63.91"
+$lsiSMTP = "smtp-us.letsignit.com"
+$ip1 = "52.226.140.66"
+$ip2 = "104.45.169.33"
+$ip3 = "40.90.242.172"
+$ip4 = "52.226.140.254"
+$ip5 = "52.185.66.245"
+$ip6 = "13.86.124.154"
 
 
 ###############################################################################
@@ -117,7 +120,7 @@ if ($inbound)
         -SenderDomains "*" `
         -ConnectorType OnPremises `
         -RequireTls $true `
-        -SenderIPAddresses $ip1, $ip2, $ip3 `
+        -SenderIPAddresses $ip1, $ip2, $ip3, $ip4, $ip5, $ip6 `
         -CloudServicesMailEnabled $true `
         -ErrorVariable CmdError
 
@@ -132,11 +135,11 @@ if ($inbound)
 else
 {
     New-InboundConnector `
-        -Name "LSI to o365" `
+        -Name "LSI_USE to o365" `
         -SenderDomains "*" `
         -ConnectorType OnPremises `
         -RequireTls $true `
-        -SenderIPAddresses $ip1, $ip2, $ip3 `
+        -SenderIPAddresses $ip1, $ip2, $ip3, $ip4, $ip5, $ip6 `
         -CloudServicesMailEnabled $true `
         -ErrorVariable CmdError
 
@@ -155,7 +158,7 @@ else
 
 Write-Output "#### OutboundConnector"
 
-$outbound = Get-OutboundConnector |  Where-Object {$_.SmartHosts -match $lsiSMTP -or $_.SmartHosts -match "lsicloud-smtp.letsignit.com"}
+$outbound = Get-OutboundConnector |  Where-Object SmartHosts -match $lsiSMTP
 if ($outbound)
 {
     Set-OutboundConnector -Identity $outbound.Id `
@@ -173,14 +176,14 @@ if ($outbound)
         throw [System.Exception]::new('UpdateOutboundConnector', $CmdError)
     }
 
-    Write-Output "Outbound connector found: updated"
+    Write-Output "Outbound connector found: do nothing"
     $outbound | ft Identity
 }
 else
 {
 
     New-OutboundConnector `
-        -Name "o365 to LSI" `
+        -Name "o365 to LSI_USE" `
         -ConnectorType OnPremises `
         -IsTransportRuleScoped $true `
         -UseMxRecord $false `
@@ -271,7 +274,7 @@ if ($rule)
 else
 {
     New-TransportRule `
-        -Name "Route email to LSI $domain" `
+        -Name "Route email to LSI_USE $domain" `
         -Priority 1 `
         -FromScope InOrganization `
         -SenderAddressLocation Envelope `
@@ -292,9 +295,7 @@ else
     }
 
     Write-Output "Outbound transport rules added"
-
 }
-
 
 ###############################################################################
 # ADD  HOSTED CONNECTION FILTER POLICY
@@ -306,7 +307,7 @@ $connectionFilter = Get-HostedConnectionFilterPolicy | where { $_.IPAllowList -m
 if ($connectionFilter)
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2, $ip3} `
+        -IPAllowList @{ Add = $ip1, $ip2, $ip3, $ip4, $ip5, $ip6} `
         -ErrorVariable CmdError
 
     if ($CmdError)
@@ -320,7 +321,7 @@ if ($connectionFilter)
 else
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2, $ip3} `
+        -IPAllowList @{ Add = $ip1, $ip2, $ip3, $ip4, $ip5, $ip6} `
         -ErrorVariable CmdError
 
     if ($CmdError)
