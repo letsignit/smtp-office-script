@@ -75,6 +75,8 @@ if ($dehydrated) {
 $lsiSMTP = "smtp-ca.letsignit.com"
 $ip1 = "40.80.240.101"
 $ip2 = "52.155.24.145"
+$ip3 = "165.22.231.153"
+$ip4 = "165.22.231.150"
 
 ###############################################################################
 # SET DOMAIN
@@ -132,7 +134,7 @@ if ($inbound)
         -SenderDomains "*" `
         -ConnectorType OnPremises `
         -RequireTls $true `
-        -SenderIPAddresses $ip1, $ip2 `
+        -SenderIPAddresses $ip1, $ip2, $ip3, $ip4 `
         -CloudServicesMailEnabled $true `
         -ErrorVariable CmdError
 
@@ -151,7 +153,7 @@ else
         -SenderDomains "*" `
         -ConnectorType OnPremises `
         -RequireTls $true `
-        -SenderIPAddresses $ip1, $ip2 `
+        -SenderIPAddresses $ip1, $ip2, $ip3, $ip4 `
         -CloudServicesMailEnabled $true `
         -ErrorVariable CmdError
 
@@ -319,7 +321,7 @@ $connectionFilter = Get-HostedConnectionFilterPolicy | where { $_.IPAllowList -m
 if ($connectionFilter)
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2 } `
+        -IPAllowList @{ Add = $ip1, $ip2, $ip3, $ip4 } `
         -ErrorVariable CmdError
 
     if ($CmdError)
@@ -333,7 +335,7 @@ if ($connectionFilter)
 else
 {
     Set-HostedConnectionFilterPolicy -Identity Default `
-        -IPAllowList @{ Add = $ip1, $ip2 } `
+        -IPAllowList @{ Add = $ip1, $ip2, $ip3, $ip4 } `
         -ErrorVariable CmdError
 
     if ($CmdError)
@@ -366,19 +368,26 @@ Get-RemoteDomain |  Where { $_.TNEFEnabled -ne $false } | foreach {
 ###############################################################################
 
 
-Write-Output "#### Set ReportToOriginator into distribution list"
+try
+{
+
+    Write-Output "#### Set ReportToOriginator into distribution list"
 
 
-Get-DistributionGroup | where { $_.isDirSynced -eq $false -and $_.ReportToOriginatorEnabled -eq $false } | foreach {
-    Set-DistributionGroup -Identity $_.Id -ReportToOriginatorEnabled $true
+    Get-DistributionGroup | where { $_.isDirSynced -eq $false -and $_.ReportToOriginatorEnabled -eq $false } | foreach {
+        Set-DistributionGroup -Identity $_.Id -ReportToOriginatorEnabled $true
+    }
+
+    Get-DynamicDistributionGroup | where { $_.ReportToOriginatorEnabled -eq $false } | foreach {
+        Set-DistributionGroup -Identity $_.Id -ReportToOriginatorEnabled $true
+    }
+
+    Get-DistributionGroup | Sort-Object DisplayName | ft DisplayName, isDirSynced, ReportToOriginatorEnabled
+
+    Get-DynamicDistributionGroup | Sort-Object DisplayName | ft DisplayName, ReportToOriginatorEnabled
+
 }
-
-Get-DynamicDistributionGroup | where { $_.ReportToOriginatorEnabled -eq $false } | foreach {
-    Set-DistributionGroup -Identity $_.Id -ReportToOriginatorEnabled $true
+catch
+{
+    Write-Output "Ran into an issue: $PSItem"
 }
-
-Get-DistributionGroup | Sort-Object DisplayName | ft DisplayName, isDirSynced, ReportToOriginatorEnabled
-
-Get-DynamicDistributionGroup | Sort-Object DisplayName | ft DisplayName, ReportToOriginatorEnabled
-
-
